@@ -26,15 +26,15 @@ async function setSessionCookie(res, idToken, rememberMe) {
 
 // ... (setSessionCookie function)
 
+// In controllers/authController.js
+
 exports.register = async (req, res) => {
-  console.log("--- INCOMING REGISTRATION BODY ---", req.body);
   try {
-    // Ensure this line expects 'name', not 'fullName'
     const { idToken, name, email, phoneNumber, rememberMe } = req.body;
 
     if (!idToken) return res.status(400).json({ message: "idToken is required" });
     if (!phoneNumber) return res.status(400).json({ message: "phoneNumber is required" });
-    if (!name) return res.status(400).json({ message: "name is required" }); // This is where the error comes from
+    if (!name) return res.status(400).json({ message: "name is required" });
 
     // Verify OTP token with Firebase
     const decoded = await admin.auth().verifyIdToken(idToken, true);
@@ -46,14 +46,31 @@ exports.register = async (req, res) => {
       return res.status(409).json({ message: "User already registered, please login" });
     }
 
-    // Create new MongoDB user
-    user = await User.create({
+    // --- ✅ CORRECTED LOGIC ---
+    // 1. Build the new user object
+    const newUser = {
       firebaseUID: uid,
-      email: email || decoded.email || null,
       phoneNumber,
-      name: name.trim(), // Ensure this uses 'name'
+      name: name.trim(),
       role: "member",
-    });
+    };
+
+    // 2. Conditionally add the email to ensure it's always unique and valid
+    if (email) {
+      // If the user provided an email in the form
+      newUser.email = email;
+    } else if (decoded.email) {
+      // Fallback to the email from the decoded token (if it exists)
+      newUser.email = decoded.email;
+    } else {
+      // If no email is available, create a unique placeholder to satisfy
+      // the 'required' and 'unique' constraints in your schema.
+      newUser.email = `${uid}@placeholder.email`;
+    }
+
+    // 3. Create the user with the guaranteed-valid object
+    user = await User.create(newUser);
+    // --- END OF CORRECTION ---
 
     // Set cookie
     await setSessionCookie(res, idToken, !!rememberMe);
@@ -61,10 +78,10 @@ exports.register = async (req, res) => {
     return res.status(201).json({ message: "Registered successfully", user });
   } catch (err) {
     console.error("Register error:", err);
-    return res.status(500).json({ message: "Server error" });
+    // This will now log a more specific database error if one occurs
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
-
 
 
 exports.login = async (req, res) => {

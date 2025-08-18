@@ -32,7 +32,11 @@ const courseSchema = new mongoose.Schema({
   description: { type: String, required: true },
   category: String,
   image: String,
-  chapters: [chapterSchema], // Chapters are embedded here
+  // AFTER
+chapters: {
+  type: [chapterSchema],
+  default: [],
+},
   isPublished: { type: Boolean, default: false },
   createdBy: { 
     type: mongoose.Schema.Types.ObjectId, 

@@ -12,10 +12,12 @@ const userSchema = new mongoose.Schema({
     unique: true,
   },
   name: String, // Stays 'name' for consistency
-  phoneNumber: { // ADDED THIS BLOCK
-    type: String,
-    required: true,
-  },
+  // AFTER
+phoneNumber: {
+  type: String,
+  required: true,
+  unique: true, // ✅ Add this line
+},
   role: {
     type: String,
     enum: ['member', 'admin'],
