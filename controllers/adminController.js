@@ -1,4 +1,4 @@
-const User = require('../models/User'); // Adjust path to your User model
+const User = require('../models/User');
 
 /**
  * @desc    Get all users with the 'member' role
@@ -7,10 +7,7 @@ const User = require('../models/User'); // Adjust path to your User model
  */
 exports.getAllMembers = async (req, res) => {
   try {
-    // Find all users where the role is 'member'
-    // .select('-password') can be used to exclude fields, though you don't have one
     const members = await User.find({ role: 'member' }).select('-__v');
-    
     res.status(200).json(members);
   } catch (err) {
     console.error('Error fetching members:', err);
@@ -18,7 +15,11 @@ exports.getAllMembers = async (req, res) => {
   }
 };
 
-// ✅ ADD THIS FUNCTION to get all admins
+/**
+ * @desc    Get all users with the 'admin' role
+ * @route   GET /api/admin/admins
+ * @access  Admin
+ */
 exports.getAllAdmins = async (req, res) => {
   try {
     const admins = await User.find({ role: 'admin' }).select('-__v');
@@ -29,13 +30,16 @@ exports.getAllAdmins = async (req, res) => {
   }
 };
 
-// ✅ ADD THIS FUNCTION to update a user's role
+/**
+ * @desc    Update a user's role
+ * @route   PUT /api/admin/users/:userId/role
+ * @access  Admin
+ */
 exports.updateUserRole = async (req, res) => {
   try {
     const { role } = req.body;
-    const userId = req.params.userId;
+    const { userId } = req.params;
 
-    // Validate the role
     if (!['admin', 'member'].includes(role)) {
       return res.status(400).json({ message: 'Invalid role specified.' });
     }
@@ -45,8 +49,7 @@ exports.updateUserRole = async (req, res) => {
       return res.status(404).json({ message: 'User not found.' });
     }
 
-    // Prevent an admin from demoting themselves
-    if (req.user.id === userToUpdate.id && role === 'member') {
+    if (req.user._id.toString() === userToUpdate._id.toString() && role === 'member') {
         return res.status(400).json({ message: 'Admins cannot demote themselves.' });
     }
 
@@ -56,6 +59,48 @@ exports.updateUserRole = async (req, res) => {
     res.status(200).json(userToUpdate);
   } catch (err) {
     console.error('Error updating user role:', err);
+    res.status(500).json({ message: 'Server Error' });
+  }
+};
+
+/**
+ * @desc    Update a user's access to a course
+ * @route   PUT /api/admin/users/:userId/access
+ * @access  Admin
+ */
+exports.updateCourseAccess = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { courseId, hasAccess } = req.body;
+
+    if (!courseId || typeof hasAccess !== 'boolean') {
+      return res.status(400).json({ message: 'Course ID and access status are required.' });
+    }
+    
+    let user;
+    if (hasAccess) {
+      // Add the courseId to the user's accessibleCourses array
+      user = await User.findByIdAndUpdate(
+        userId,
+        { $addToSet: { accessibleCourses: courseId } },
+        { new: true }
+      );
+    } else {
+      // Remove the courseId from the array
+      user = await User.findByIdAndUpdate(
+        userId,
+        { $pull: { accessibleCourses: courseId } },
+        { new: true }
+      );
+    }
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    res.status(200).json(user);
+  } catch (err) {
+    console.error('Error updating course access:', err);
     res.status(500).json({ message: 'Server Error' });
   }
 };

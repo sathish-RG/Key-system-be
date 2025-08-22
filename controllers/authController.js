@@ -1,4 +1,3 @@
-// controllers/authController.js
 const admin = require("../config/firebase");
 const User = require("../models/User");
 
@@ -18,36 +17,23 @@ async function setSessionCookie(res, idToken, rememberMe) {
   });
 }
 
-/**
- * POST /api/auth/register
- * Body: { idToken, fullName, email, phoneNumber, rememberMe }
- */
-// ... (imports)
-
-// ... (setSessionCookie function)
-
-// In controllers/authController.js
-
+// --- REGISTER ---
 exports.register = async (req, res) => {
   try {
-    const { idToken, name, email, phoneNumber, rememberMe } = req.body;
+    const { idToken, name, email, phoneNumber } = req.body;
 
-    if (!idToken) return res.status(400).json({ message: "idToken is required" });
-    if (!phoneNumber) return res.status(400).json({ message: "phoneNumber is required" });
-    if (!name) return res.status(400).json({ message: "name is required" });
+    if (!idToken || !name || !phoneNumber) {
+      return res.status(400).json({ message: "Missing required fields." });
+    }
 
-    // Verify OTP token with Firebase
+    let existingUser = await User.findOne({ phoneNumber });
+    if (existingUser) {
+      return res.status(409).json({ message: "This phone number is already registered. Please login." });
+    }
+
     const decoded = await admin.auth().verifyIdToken(idToken, true);
     const uid = decoded.uid;
 
-    // Check if already registered
-    let user = await User.findOne({ firebaseUID: uid });
-    if (user) {
-      return res.status(409).json({ message: "User already registered, please login" });
-    }
-
-    // --- ✅ CORRECTED LOGIC ---
-    // 1. Build the new user object
     const newUser = {
       firebaseUID: uid,
       phoneNumber,
@@ -55,54 +41,42 @@ exports.register = async (req, res) => {
       role: "member",
     };
 
-    // 2. Conditionally add the email to ensure it's always unique and valid
     if (email) {
-      // If the user provided an email in the form
       newUser.email = email;
-    } else if (decoded.email) {
-      // Fallback to the email from the decoded token (if it exists)
-      newUser.email = decoded.email;
     } else {
-      // If no email is available, create a unique placeholder to satisfy
-      // the 'required' and 'unique' constraints in your schema.
       newUser.email = `${uid}@placeholder.email`;
     }
 
-    // 3. Create the user with the guaranteed-valid object
-    user = await User.create(newUser);
-    // --- END OF CORRECTION ---
+    const user = await User.create(newUser);
+    
+    // ✅ REMOVED: The line that automatically logs the user in.
+    // await setSessionCookie(res, idToken, true);
 
-    // Set cookie
-    await setSessionCookie(res, idToken, !!rememberMe);
-
+    // Now, it just confirms registration without creating a session.
     return res.status(201).json({ message: "Registered successfully", user });
+
   } catch (err) {
     console.error("Register error:", err);
-    // This will now log a more specific database error if one occurs
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
-
-
+// --- LOGIN ---
 exports.login = async (req, res) => {
   try {
-    const { idToken, phoneNumber, rememberMe } = req.body;
-    if (!idToken) return res.status(400).json({ message: "idToken is required" });
-    if (!phoneNumber) return res.status(400).json({ message: "phoneNumber is required" });
-
-    // Verify OTP with Firebase
-    const decoded = await admin.auth().verifyIdToken(idToken, true);
-    const uid = decoded.uid;
-
-    // Check if registered in MongoDB
-    let user = await User.findOne({ firebaseUID: uid, phoneNumber });
-    if (!user) {
-      return res.status(401).json({ message: "User not registered, please register first" });
+    const { idToken, rememberMe } = req.body;
+    if (!idToken) {
+      return res.status(400).json({ message: "idToken is required" });
     }
 
-    // Set cookie
-    await setSessionCookie(res, idToken, !!rememberMe);
+    const decoded = await admin.auth().verifyIdToken(idToken, true);
+    
+    // ✅ FIXED: Find user by their unique Firebase ID
+    const user = await User.findOne({ firebaseUID: decoded.uid });
+    if (!user) {
+      return res.status(401).json({ message: "User not registered. Please register first." });
+    }
 
+    await setSessionCookie(res, idToken, !!rememberMe);
     return res.json({ message: "Login successful", user });
   } catch (err) {
     console.error("Login error:", err);
@@ -110,17 +84,10 @@ exports.login = async (req, res) => {
   }
 };
 
-/**
- * POST /api/auth/logout
- */
+// --- LOGOUT ---
 exports.logout = async (req, res) => {
   try {
-    res.clearCookie(COOKIE_NAME, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: "strict",
-      path: "/",
-    });
+    res.clearCookie(COOKIE_NAME);
     return res.json({ message: "Logged out" });
   } catch (err) {
     console.error("Logout error:", err);
@@ -128,28 +95,12 @@ exports.logout = async (req, res) => {
   }
 };
 
-/**
- * GET /api/auth/me
- */
+// --- GET CURRENT USER PROFILE ---
 exports.getProfile = async (req, res) => {
-  try {
-    if (!req.firebase) return res.status(401).json({ message: "Unauthorized" });
-
-    let user = req.user;
-    if (!user) {
-      return res.status(404).json({ message: "User not found in DB" });
-    }
-
-    return res.json({
-      user,
-      firebase: {
-        uid: req.firebase.uid,
-        email: req.firebase.email,
-        phoneNumber: req.firebase.phoneNumber,
-      },
-    });
-  } catch (err) {
-    console.error("Get profile error:", err);
-    return res.status(500).json({ message: "Server error" });
+  // This function relies on the `auth` middleware to attach `req.user`
+  if (req.user) {
+    return res.status(200).json({ user: req.user });
+  } else {
+    return res.status(401).json({ message: "Not authenticated" });
   }
 };

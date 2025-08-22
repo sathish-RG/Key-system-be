@@ -1,24 +1,32 @@
 const express = require('express');
-const courseRouter = express.Router();
+const router = express.Router();
 
 const {
   createCourse,
   getAllCourses,
   getCourseById,
   updateCourse,
-  deleteCourse
+  deleteCourse,
+  getMemberCourses 
 } = require('../controllers/courseController');
 
 const auth = require('../middlewares/auth');
 const allowRoles = require('../middlewares/allowRoles');
 
-// Public routes
-courseRouter.route('/').get(getAllCourses);
-courseRouter.route('/:id').get(getCourseById);
+// ✅ RULE: Specific routes (like '/my-courses') MUST come before dynamic routes (like '/:id').
 
-// Admin-only routes
-courseRouter.route('/').post(auth, allowRoles(['admin']), createCourse);
-courseRouter.route('/:id').put(auth, allowRoles(['admin']), updateCourse);
-courseRouter.route('/:id').delete(auth, allowRoles(['admin']), deleteCourse);
+// --- PROTECTED ROUTES ---
+// Route for logged-in members to get their specific courses
+router.get('/my-courses', auth, allowRoles(['member', 'admin']), getMemberCourses);
+router.post('/', auth, allowRoles(['admin']), createCourse);
+router.put('/:id', auth, allowRoles(['admin']), updateCourse);
+router.delete('/:id', auth, allowRoles(['admin']), deleteCourse);
 
-module.exports = courseRouter;
+// --- PUBLIC ROUTES ---
+// The general "get all" route
+router.get('/', getAllCourses);
+// The dynamic "get by id" route MUST be last among the GET routes
+router.get('/:id', getCourseById);
+
+
+module.exports = router;

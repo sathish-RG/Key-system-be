@@ -11,20 +11,24 @@ const userSchema = new mongoose.Schema({
     required: true,
     unique: true,
   },
-  name: String, // Stays 'name' for consistency
-  // AFTER
-phoneNumber: {
-  type: String,
-  required: true,
-  unique: true, // ✅ Add this line
-},
+  name: String,
+  phoneNumber: {
+    type: String,
+    required: true,
+    unique: true,
+  },
   role: {
     type: String,
     enum: ['member', 'admin'],
     default: 'member',
   },
+  // ✅ ADD THIS FIELD to track which courses a member can access
+  accessibleCourses: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Course'
+  }]
 }, {
   timestamps: true,
 });
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.models.User || mongoose.model('User', userSchema);

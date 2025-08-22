@@ -4,20 +4,18 @@ const router = express.Router();
 const auth = require('../middlewares/auth');
 const allowRoles = require('../middlewares/allowRoles');
 
-// Import all necessary controller functions
 const { 
   getAllMembers, 
   getAllAdmins, 
-  updateUserRole 
+  updateUserRole,
+  updateCourseAccess // Import the new function
 } = require('../controllers/adminController');
 
-// Existing route for members
 router.get('/members', auth, allowRoles(['admin']), getAllMembers);
-
-// ✅ ADD THIS route to get all admins
 router.get('/admins', auth, allowRoles(['admin']), getAllAdmins);
-
-// ✅ ADD THIS route to update a user's role
 router.put('/users/:userId/role', auth, allowRoles(['admin']), updateUserRole);
+
+// ✅ ADD THIS ROUTE to update a user's course access
+router.put('/users/:userId/access', auth, allowRoles(['admin']), updateCourseAccess);
 
 module.exports = router;
